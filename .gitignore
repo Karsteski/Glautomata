@@ -1,0 +1,9 @@
+/.vscode
+/builddir
+
+# Exclude Meson Wrap DB subproject files that will be downloaded upon project setup.
+/subprojects/*
+
+# Keep the Wrap DB definitions. 
+!/subprojects/sdl2.wrap
+!/subprojects/glew.wrap
