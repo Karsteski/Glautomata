@@ -6,11 +6,12 @@ message('Warning level = ' + get_option('warning_level'))
 message('Build type = ' + get_option('buildtype'))
 
 # Dependencies.
-sdl2_dep = dependency('sdl2', fallback: ['sdl2', 'sdl2_dep'])
+glfw_dep = dependency('glfw3')
 glew_dep = dependency('glew', fallback : ['glew', 'glew_dep'])
 opengl_dep = dependency('opengl')
+glm_dep = dependency('glm', fallback : ['glm', 'glm_dep'])
 
-deps = [sdl2_dep, glew_dep, opengl_dep]
+deps = [glfw_dep, glew_dep, opengl_dep, glm_dep]
 
 src_file = 'glautomata.cpp'
 

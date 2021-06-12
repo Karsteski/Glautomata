@@ -7,3 +7,4 @@
 # Keep the Wrap DB definitions. 
 !/subprojects/sdl2.wrap
 !/subprojects/glew.wrap
+!/subprojects/glm.wrap

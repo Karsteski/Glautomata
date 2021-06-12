@@ -1,92 +1,432 @@
 // GLEW loads OpenGL function pointers from the system's graphics drivers.
 // glew.h MUST be included before gl.h
 // clang-format off
-#include "SDL_error.h"
-#include "SDL_video.h"
 #include <GL/glew.h>
 #include <GL/gl.h>
 
-#include <SDL.h>
-#include <SDL_opengl.h>
+// Disables inclusion of the dev-environ header.
+// Allows GLFW + extension loader headers to be included in any order.
+// GLFW including OpenGL headers causes function definition ambiguity.
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 // clang-format on
 
-#include <cstdlib>
-#include <iostream>
+// Maths library includes
+#include "glm/vec3.hpp"
 
-SDL_Window* window = nullptr;
-SDL_GLContext context = nullptr;
+#include <array>
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
+std::string shaderPath = "../shader.glsl";
 
-bool Initialize();
-int Exit();
+GLFWwindow* window;
+
+// ------------------
+// Program Management
+// ------------------
+
+void Initialize(GLFWwindow*& window);
+void Run();
+int Exit(GLFWwindow* window);
+
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adjust size of viewport
+
+// ---------------------
+// OpenGL Error Handling
+// ---------------------
+
+void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
+
+// --------------
+// Helper structs
+// --------------
+
+struct Vertex {
+    // Vertex attributes
+    glm::vec3 position;
+    glm::vec3 colour;
+};
+
+struct ShaderProgramSource {
+    std::string vertexSource;
+    std::string fragmentSource;
+};
+
+// ----------------
+// Shader Functions
+// ----------------
+
+ShaderProgramSource parseShader(const std::string& filepath);
+uint32_t compileShader(uint32_t shaderType, std::string& shaderSource);
+uint32_t createShader(ShaderProgramSource& shaderSource);
 
 int main()
 {
-    if (!Initialize()) {
-        std::exit(EXIT_FAILURE);
-    }
+    Initialize(window);
 
-    while (true) {
+    // Vertex Buffer data
+    std::vector<Vertex> square(4);
+    square[0].position = { -0.5f, -0.5f, 0.0f };
+    square[0].colour = { 1.0f, 0.0f, 0.0f };
+
+    square[1].position = { 0.5f, -0.5f, 0.0f };
+    square[1].colour = { 0.0f, 1.0f, 0.0f };
+    
+    square[2].position = { 0.5f, 0.5f, 0.0f };
+    square[2].colour = { 0.0f, 0.0f, 1.0f };
+
+    square[3].position = { -0.5f, 0.5f, 0.0f };
+    square[3].colour = { 1.0f, 1.0f, 1.0f };
+
+    // Index Buffer data
+    std::vector<uint32_t> indices = { 0, 1 , 2, 0, 2, 3};
+
+    constexpr int nBuffers = 1;
+
+    // Create Vertex Array Object
+    uint32_t VAO = 0;
+    glGenVertexArrays(nBuffers, &VAO);
+    glBindVertexArray(VAO);
+
+    // Create Vertex Buffer Object
+    uint32_t VBO = 0;
+    glGenBuffers(nBuffers, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, square.size() * sizeof(Vertex), square.data(), GL_STATIC_DRAW);
+
+    // Create Index Buffer Object
+    uint32_t IBO = 0;
+    glGenBuffers(nBuffers, &IBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+
+    // Link current VAO with the VBO, and define its layout
+    constexpr int positionAttribute = 0;
+    constexpr int colourAttribute = 1;
+
+    constexpr int nFloatsInAttribute = 3;
+    constexpr int stride = sizeof(Vertex);
+    const void* positionOffset = (void*)offsetof(struct Vertex, position); // (void*) as the OpenGL API requires it.
+    const void* colourOffset = (void*)offsetof(struct Vertex, colour);
+
+    glVertexAttribPointer(positionAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, positionOffset);
+    glEnableVertexAttribArray(positionAttribute);
+
+    glVertexAttribPointer(colourAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, colourOffset);
+    glEnableVertexAttribArray(colourAttribute);
+
+    // Shader creation
+    ShaderProgramSource shaderSource = parseShader(shaderPath);
+
+    uint32_t shader = createShader(shaderSource);
+    glUseProgram(shader);
+
+    while (!glfwWindowShouldClose(window)) {
+
+        // Clear screen
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Set viewport size to window size
+        static int currentWindowWidth = 0;
+        static int currentWindowHeight = 0;
+        glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
+        glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+
+        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, nullptr);
 
         // Update screen
-        SDL_GL_SwapWindow(window);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
-    Exit();
+    glDeleteProgram(shader);
+    Exit(window);
 }
 
-bool Initialize()
-{
-    bool success = true;
+// ------------------
+// Program Management
+// ------------------
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cout << "SDL could not initialize! SDL Error: " << SDL_GetError() << std::endl;
-        success = false;
+void Initialize(GLFWwindow*& window)
+{
+
+    // GLFW Setup
+    if (!glfwInit()) {
+        std::cout << "GLFW Initialization failed!\n"
+                  << "Exiting...\n";
+
+        exit(EXIT_FAILURE);
     }
-    // Use OpenGL 4.0 Core
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+    // Use OpenGL 4.6 Core
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+
+    // For OpenGL Debugging
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
     // Create window
-    window = SDL_CreateWindow("Glautomata - Conway's Game of Life using OpenGL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    if (window == nullptr) {
-        std::cout << "Window could not be created! SDL Error: " << SDL_GetError() << std::endl;
-        success = false;
+    window = glfwCreateWindow(windowWidth, windowHeight, "Glautomata - John Conway's Game of Life", NULL, NULL);
+
+    if (window == NULL) {
+        std::cout << "GLFW window creation failed\n"
+                  << "Exiting...\n ";
+        exit(EXIT_FAILURE);
     }
 
-    // Create context
-    context = SDL_GL_CreateContext(window);
-    if (context == nullptr)
+    // Create OpenGL context
+    glfwMakeContextCurrent(window);
 
-    {
-        std::cout << "OpenGL context could not be created! SDL Error: " << SDL_GetError() << std::endl;
-        success = false;
+    // A valid OpenGL context must be created before initializing GLEW.
+    // Initialize OpenGL loader (GLEW in this project).
+    bool error = glewInit();
+    if (error != GLEW_OK) {
+        std::cout << "Error: Failed to initialize OpenGL function pointer loader!\n";
     }
 
-    // Initialize GLEW
-    GLenum glewError = glewInit();
-    if (glewError != GLEW_OK) {
-        std::cout << "Error initializing GLEW! Error: " << glewGetErrorString(glewError) << std::endl;
-    }
+    // Enable debugging layer of OpenGL
+    int glFlags = 0;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &glFlags);
+    if (glFlags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
-    // Use VSync
-    if (SDL_GL_SetSwapInterval(1) < 0) {
-        std::cout << "Warning: Unable to set VSync! SDL Error: " << SDL_GetError() << std::endl;
-    }
+        glDebugMessageCallback(glDebugPrintMessage, nullptr);
 
-    return success;
+        std::cout << ("OpenGL Debug Mode\n");
+    } else {
+        std::cout << "Debug for OpenGL not supported by the system!\n";
+    }
 }
 
-int Exit()
+void Run()
 {
-    SDL_DestroyWindow(window);
-    window = nullptr;
-    
-    // Quit SDL subsystems
-    SDL_Quit();
+}
+
+int Exit(GLFWwindow* window)
+{
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     std::exit(EXIT_SUCCESS);
+}
+
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
+{
+    // Ensure viewport matches new window dimensions
+    glViewport(0, 0, width, height);
+}
+
+// ---------------------
+// OpenGL Error Handling
+// ---------------------
+
+// Callback function for printing OpenGL debug statements.
+// Note that OpenGL Debug Output must be enabled to utilize glDebugMessageCallback() and consequently this function.
+void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data)
+{
+
+    // To enable the debugging layer of OpenGL:
+
+    // glEnable(GL_DEBUG_OUTPUT); - This is a faster version but there are no debugger breakpoints.
+    // glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); - Callback is synchronized w/ errors, and a breakpoint can be placed on the callback to get a stacktrace for the GL error.
+
+    // Followed by the call:
+    // glDebugMessageCallback(glDebugPrintMessage, nullptr);
+
+    std::string sourceMessage = "";
+    std::string typeMessage = "";
+    std::string severityMessage = "";
+
+    switch (source) {
+    case GL_DEBUG_SOURCE_API: {
+        sourceMessage = "API";
+        break;
+    }
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM: {
+        sourceMessage = "WINDOW SYSTEM";
+        break;
+    }
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: {
+        sourceMessage = "SHADER COMPILER";
+        break;
+    }
+    case GL_DEBUG_SOURCE_THIRD_PARTY: {
+        sourceMessage = "THIRD PARTY";
+        break;
+    }
+    case GL_DEBUG_SOURCE_APPLICATION: {
+        sourceMessage = "APPLICATION";
+        break;
+    }
+    case GL_DEBUG_SOURCE_OTHER: {
+        sourceMessage = "UNKNOWN";
+        break;
+    }
+    default: {
+        sourceMessage = "UNKNOWN";
+        break;
+    }
+    }
+
+    switch (type) {
+    case GL_DEBUG_TYPE_ERROR: {
+        typeMessage = "ERROR";
+        break;
+    }
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: {
+        typeMessage = "DEPRECATED BEHAVIOUR";
+        break;
+    }
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: {
+        typeMessage = "UNDEFINED BEHAVIOUR";
+        break;
+    }
+    case GL_DEBUG_TYPE_PORTABILITY: {
+        typeMessage = "PORTABILITY";
+        break;
+    }
+    case GL_DEBUG_TYPE_PERFORMANCE: {
+        typeMessage = "PERFORMANCE";
+        break;
+    }
+    case GL_DEBUG_TYPE_OTHER: {
+        typeMessage = "OTHER";
+        break;
+    }
+    case GL_DEBUG_TYPE_MARKER: {
+        typeMessage = "MARKER";
+        break;
+    }
+    default: {
+        typeMessage = "UNKNOWN";
+        break;
+    }
+    }
+
+    switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH: {
+        severityMessage = "HIGH";
+        break;
+    }
+    case GL_DEBUG_SEVERITY_MEDIUM: {
+        severityMessage = "MEDIUM";
+        break;
+    }
+    case GL_DEBUG_SEVERITY_LOW: {
+        severityMessage = "LOW";
+        break;
+    }
+    case GL_DEBUG_SEVERITY_NOTIFICATION: {
+        severityMessage = "NOTIFICATION";
+        break;
+    }
+    default: {
+        severityMessage = "UNKNOWN";
+        break;
+    }
+    }
+
+    std::cout << id << ": " << typeMessage << " of " << severityMessage << ", raised from "
+              << sourceMessage << ": " << message << std::endl;
+}
+
+// ----------------
+// Shader Functions
+// ----------------
+
+ShaderProgramSource parseShader(const std::string& filepath)
+{
+    // For separating the two stringstreams.
+    enum class ShaderType {
+        NONE = -1,
+        VERTEX = 0,
+        FRAGMENT = 1
+    };
+
+    std::ifstream stream(filepath);
+    std::array<std::stringstream, 2> ss;
+
+    std::string line = "";
+    ShaderType type = ShaderType::NONE;
+
+    // Read lines from the file while separating the two shader types into different stringstreams.
+    while (getline(stream, line)) {
+        if (line.find("#shader") != std::string::npos) {
+            if (line.find("vertex") != std::string::npos) {
+                type = ShaderType::VERTEX;
+            } else if (line.find("fragment") != std::string::npos) {
+                type = ShaderType::FRAGMENT;
+            }
+        } else {
+            ss[static_cast<int>(type)] << line << "\n";
+        }
+    }
+
+    ShaderProgramSource shaders;
+    shaders.vertexSource = ss[0].str();
+    shaders.fragmentSource = ss[1].str();
+
+    return shaders;
+}
+
+uint32_t compileShader(uint32_t shaderType, std::string& shaderSource)
+{
+    uint32_t id = glCreateShader(shaderType);
+
+    const char* src = shaderSource.c_str();
+
+    constexpr int nShaderSources = 1;
+    glShaderSource(id, nShaderSources, &src, nullptr);
+    glCompileShader(id);
+
+    // Error handling.
+    int result = 0;
+    glGetShaderiv(id, GL_COMPILE_STATUS, &result);
+    if (result == GL_FALSE) {
+        int errorMessageLength = 0;
+        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &errorMessageLength);
+        std::string message = "";
+        glGetShaderInfoLog(id, errorMessageLength, &errorMessageLength, message.data());
+
+        // Simple logging
+        std::cout << "Failed to compile " << (shaderType == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader!\n"
+                  << message << std::endl;
+
+        glDeleteShader(id);
+
+        // id set to 0 as shader was not compiled
+        id = 0;
+    }
+
+    return id;
+}
+
+uint32_t createShader(ShaderProgramSource& source)
+{
+    uint32_t program = glCreateProgram();
+    uint32_t vs = compileShader(GL_VERTEX_SHADER, source.vertexSource);
+    uint32_t fs = compileShader(GL_FRAGMENT_SHADER, source.fragmentSource);
+
+    // These steps create an executable that is run on the programmable vertex/fragment shader processer on the GPU.
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glLinkProgram(program);
+    glValidateProgram(program);
+
+    // Delete to shaders once they have been linked and compiled.
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    return program;
 }
