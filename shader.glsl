@@ -6,10 +6,13 @@ layout(location = 1) in vec3 colour;
 
 out vec3 outVertexColour;
 
+// For Orthographic projection matrix
+uniform mat4 u_MVP;
+
 void main()
 {
-gl_Position = vec4(position, 1.0);
-outVertexColour = colour;
+    gl_Position = u_MVP * vec4(position, 1.0);
+    outVertexColour = colour;
 };
 
 

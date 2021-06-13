@@ -13,8 +13,11 @@
 
 // Maths library includes
 #include "glm/vec3.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -24,9 +27,8 @@
 
 constexpr int windowWidth = 1280;
 constexpr int windowHeight = 720;
-std::string shaderPath = "../shader.glsl";
-
-GLFWwindow* window;
+const std::string shaderPath = "../shader.glsl";
+constexpr int gridSize = 10;
 
 // ------------------
 // Program Management
@@ -69,24 +71,24 @@ uint32_t createShader(ShaderProgramSource& shaderSource);
 
 int main()
 {
+    GLFWwindow* window = nullptr;
     Initialize(window);
 
+    const glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
+    const glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
     // Vertex Buffer data
-    std::vector<Vertex> square(4);
-    square[0].position = { -0.5f, -0.5f, 0.0f };
-    square[0].colour = { 1.0f, 0.0f, 0.0f };
-
-    square[1].position = { 0.5f, -0.5f, 0.0f };
-    square[1].colour = { 0.0f, 1.0f, 0.0f };
-    
-    square[2].position = { 0.5f, 0.5f, 0.0f };
-    square[2].colour = { 0.0f, 0.0f, 1.0f };
-
-    square[3].position = { -0.5f, 0.5f, 0.0f };
-    square[3].colour = { 1.0f, 1.0f, 1.0f };
+    std::vector<Vertex> blackSquare(4);
+    blackSquare[0].position = { 0.0f, 0.0f, 0.0f };
+    blackSquare[0].colour = colourWhite;
+    blackSquare[1].position = { 100.0f, 0.0f, 0.0f };
+    blackSquare[1].colour = colourBlack;
+    blackSquare[2].position = { 100.0f, 100.0f, 0.0f };
+    blackSquare[2].colour = colourWhite;
+    blackSquare[3].position = { 0.0f, 100.0f, 0.0f };
+    blackSquare[3].colour = colourBlack;
 
     // Index Buffer data
-    std::vector<uint32_t> indices = { 0, 1 , 2, 0, 2, 3};
+    std::vector<uint32_t> indices = { 0, 1, 2, 0, 2, 3 };
 
     constexpr int nBuffers = 1;
 
@@ -95,17 +97,19 @@ int main()
     glGenVertexArrays(nBuffers, &VAO);
     glBindVertexArray(VAO);
 
+    const int nVertices = std::pow(gridSize, 2) * 4;
+    const int nVertexBytes = nVertices * sizeof(Vertex);
     // Create Vertex Buffer Object
     uint32_t VBO = 0;
     glGenBuffers(nBuffers, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, square.size() * sizeof(Vertex), square.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, blackSquare.size() * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
 
     // Create Index Buffer Object
     uint32_t IBO = 0;
     glGenBuffers(nBuffers, &IBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_DYNAMIC_DRAW);
 
     // Link current VAO with the VBO, and define its layout
     constexpr int positionAttribute = 0;
@@ -129,6 +133,9 @@ int main()
     glUseProgram(shader);
 
     while (!glfwWindowShouldClose(window)) {
+        // Set dynamic buffer
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, blackSquare.size() * sizeof(Vertex), blackSquare.data());
 
         // Clear screen
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -137,8 +144,14 @@ int main()
         // Set viewport size to window size
         static int currentWindowWidth = 0;
         static int currentWindowHeight = 0;
+        float aspectRatio = static_cast<float>(currentWindowWidth) / static_cast<float>(currentWindowHeight);
         glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
         glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+
+        // Orthographic project matrix.
+        glm::mat4 projection = glm::ortho(0.0f, (float)currentWindowWidth, 0.0f, (float)currentWindowHeight, 0.0f, 100.0f);
+        constexpr int nElements = 1;
+        glUniformMatrix4fv(glGetUniformLocation(shader, "u_MVP"), nElements, GL_FALSE, &projection[0][0]);
 
         glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, nullptr);
 
