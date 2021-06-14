@@ -145,7 +145,7 @@ int main()
     glUseProgram(shader);
 
     auto c0 = CreateCell({ { 0, 0 }, State::DEAD });
-    auto c1 = CreateCell({ { 100, 100 }, State::ALIVE });
+    auto c1 = CreateCell({ { 1, 1 }, State::ALIVE });
 
     std::vector<Vertex> vertices;
     vertices.reserve(nVertices);
@@ -475,6 +475,9 @@ std::vector<Vertex> CreateCell(Cell cell)
 
     std::vector<Vertex> cellVertices(4);
     glm::vec3 cellColour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
+
+    // Adjust each position for the size of a cell
+    cell.position *= size;
 
     // Vertex Buffer data
     cellVertices[0].position = { cell.position.x, cell.position.y };
