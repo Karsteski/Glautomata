@@ -19,6 +19,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -46,19 +47,34 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adju
 
 void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
 
-// --------------
-// Helper structs
-// --------------
+// ----------------------
+// Helper structs & enums
+// ----------------------
 
 struct Vertex {
     // Vertex attributes
-    glm::vec3 position;
+    glm::vec2 position;
     glm::vec3 colour;
 };
 
 struct ShaderProgramSource {
     std::string vertexSource;
     std::string fragmentSource;
+};
+
+enum class State {
+    DEAD = 0,
+    ALIVE = 1
+};
+
+struct Cell {
+    glm::vec2 position;
+    State state;
+
+    // Allow for initializer list usage
+    Cell(glm::vec2 position_, State state_)
+        : position(position_)
+        , state(state_) {};
 };
 
 // ----------------
@@ -69,26 +85,16 @@ ShaderProgramSource parseShader(const std::string& filepath);
 uint32_t compileShader(uint32_t shaderType, std::string& shaderSource);
 uint32_t createShader(ShaderProgramSource& shaderSource);
 
+// ------------------
+// Automata Functions
+// ------------------
+
+std::vector<Vertex> CreateCell(Cell cell);
+
 int main()
 {
     GLFWwindow* window = nullptr;
     Initialize(window);
-
-    const glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
-    const glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
-    // Vertex Buffer data
-    std::vector<Vertex> blackSquare(4);
-    blackSquare[0].position = { 0.0f, 0.0f, 0.0f };
-    blackSquare[0].colour = colourWhite;
-    blackSquare[1].position = { 100.0f, 0.0f, 0.0f };
-    blackSquare[1].colour = colourBlack;
-    blackSquare[2].position = { 100.0f, 100.0f, 0.0f };
-    blackSquare[2].colour = colourWhite;
-    blackSquare[3].position = { 0.0f, 100.0f, 0.0f };
-    blackSquare[3].colour = colourBlack;
-
-    // Index Buffer data
-    std::vector<uint32_t> indices = { 0, 1, 2, 0, 2, 3 };
 
     constexpr int nBuffers = 1;
 
@@ -99,12 +105,18 @@ int main()
 
     const int nVertices = std::pow(gridSize, 2) * 4;
     const int nVertexBytes = nVertices * sizeof(Vertex);
+
     // Create Vertex Buffer Object
     uint32_t VBO = 0;
     glGenBuffers(nBuffers, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, blackSquare.size() * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
+    glBufferData(GL_ARRAY_BUFFER, nVertexBytes, nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
 
+    // Index Buffer data
+    std::vector<uint32_t> indices = {
+        0, 1, 2, 0, 2, 3,
+        4, 5, 6, 4, 6, 7
+    };
     // Create Index Buffer Object
     uint32_t IBO = 0;
     glGenBuffers(nBuffers, &IBO);
@@ -132,10 +144,18 @@ int main()
     uint32_t shader = createShader(shaderSource);
     glUseProgram(shader);
 
+    auto c0 = CreateCell({ { 0, 0 }, State::DEAD });
+    auto c1 = CreateCell({ { 100, 100 }, State::ALIVE });
+
+    std::vector<Vertex> vertices;
+    vertices.reserve(nVertices);
+    vertices.insert(vertices.end(), c0.begin(), c0.end());
+    vertices.insert(vertices.end(), c1.begin(), c1.end());
+
     while (!glfwWindowShouldClose(window)) {
         // Set dynamic buffer
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, blackSquare.size() * sizeof(Vertex), blackSquare.data());
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(Vertex), vertices.data());
 
         // Clear screen
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -144,7 +164,6 @@ int main()
         // Set viewport size to window size
         static int currentWindowWidth = 0;
         static int currentWindowHeight = 0;
-        float aspectRatio = static_cast<float>(currentWindowWidth) / static_cast<float>(currentWindowHeight);
         glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
         glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
@@ -442,4 +461,30 @@ uint32_t createShader(ShaderProgramSource& source)
     glDeleteShader(fs);
 
     return program;
+}
+
+// ------------------
+// Automata Functions
+// ------------------
+
+std::vector<Vertex> CreateCell(Cell cell)
+{
+    constexpr float size = 100.0f;
+    constexpr glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
+    constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
+
+    std::vector<Vertex> cellVertices(4);
+    glm::vec3 cellColour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
+
+    // Vertex Buffer data
+    cellVertices[0].position = { cell.position.x, cell.position.y };
+    cellVertices[0].colour = cellColour;
+    cellVertices[1].position = { cell.position.x + size, cell.position.y };
+    cellVertices[1].colour = cellColour;
+    cellVertices[2].position = { cell.position.x + size, cell.position.y + size };
+    cellVertices[2].colour = cellColour;
+    cellVertices[3].position = { cell.position.x, cell.position.y + size };
+    cellVertices[3].colour = cellColour;
+
+    return cellVertices;
 }
