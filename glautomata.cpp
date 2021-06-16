@@ -90,6 +90,8 @@ uint32_t createShader(ShaderProgramSource& shaderSource);
 // ------------------
 
 std::vector<Vertex> CreateCell(Cell cell);
+State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position);
+void SetCellState(const std::vector<Vertex>& buffer, Cell cell);
 
 int main()
 {
@@ -113,10 +115,25 @@ int main()
     glBufferData(GL_ARRAY_BUFFER, nVertexBytes, nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
 
     // Index Buffer data
-    std::vector<uint32_t> indices = {
-        0, 1, 2, 0, 2, 3,
-        4, 5, 6, 4, 6, 7
-    };
+    // std::vector<uint32_t> indices = {
+    //     0, 1, 2, 0, 2, 3,
+    //     4, 5, 6, 4, 6, 7,
+    //     8, 9, 10, 8, 10, 11
+    // };
+
+    int indexCount = 0;
+    std::vector<uint32_t> indices;
+    while (indexCount < 10) {
+        indices.push_back((indexCount * 4) + 0);
+        indices.push_back((indexCount * 4) + 1);
+        indices.push_back((indexCount * 4) + 2);
+        indices.push_back((indexCount * 4) + 0);
+        indices.push_back((indexCount * 4) + 2);
+        indices.push_back((indexCount * 4) + 3);
+
+        ++indexCount;
+    }
+
     // Create Index Buffer Object
     uint32_t IBO = 0;
     glGenBuffers(nBuffers, &IBO);
@@ -149,8 +166,19 @@ int main()
 
     std::vector<Vertex> vertices;
     vertices.reserve(nVertices);
-    vertices.insert(vertices.end(), c0.begin(), c0.end());
-    vertices.insert(vertices.end(), c1.begin(), c1.end());
+    //vertices.insert(vertices.end(), c0.begin(), c0.end());
+    //vertices.insert(vertices.end(), c1.begin(), c1.end());
+
+    int count = 0;
+    while (count < 10) {
+        auto cell = CreateCell({ { count, count }, count % 2 ? State::ALIVE : State::DEAD });
+        vertices.insert(vertices.end(), cell.begin(), cell.end());
+        ++count;
+    }
+
+    // Test for GetCellState
+    auto state_1 = GetCellState(vertices, { 0, 0 });
+    std::cout << "Cell state 1 = " << (static_cast<bool>(state_1) ? "ALIVE" : "DEAD") << std::endl;
 
     while (!glfwWindowShouldClose(window)) {
         // Set dynamic buffer
@@ -490,4 +518,26 @@ std::vector<Vertex> CreateCell(Cell cell)
     cellVertices[3].colour = cellColour;
 
     return cellVertices;
+}
+
+State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position)
+{
+
+    constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
+
+    State state = State::DEAD;
+
+    constexpr int verticesPerCell = 4;
+    // Convert 2D position to 1D array
+    uint32_t index = position.x * (verticesPerCell - 1) + position.y;
+
+    if (buffer.at(index).colour == colourWhite) {
+        state = State::ALIVE;
+    }
+
+    return state;
+}
+
+void SetCellState(const std::vector<Vertex>& buffer, Cell cell)
+{
 }
