@@ -3,6 +3,7 @@
 // clang-format off
 #include <GL/glew.h>
 #include <GL/gl.h>
+#include <stdexcept>
 
 // Disables inclusion of the dev-environ header.
 // Allows GLFW + extension loader headers to be included in any order.
@@ -91,7 +92,7 @@ uint32_t createShader(ShaderProgramSource& shaderSource);
 
 std::vector<Vertex> CreateCell(Cell cell);
 State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position);
-void SetCellState(const std::vector<Vertex>& buffer, Cell cell);
+void SetCellState(std::vector<Vertex>& buffer, Cell cell);
 
 int main()
 {
@@ -124,12 +125,14 @@ int main()
     int indexCount = 0;
     std::vector<uint32_t> indices;
     while (indexCount < 10) {
-        indices.push_back((indexCount * 4) + 0);
-        indices.push_back((indexCount * 4) + 1);
-        indices.push_back((indexCount * 4) + 2);
-        indices.push_back((indexCount * 4) + 0);
-        indices.push_back((indexCount * 4) + 2);
-        indices.push_back((indexCount * 4) + 3);
+        constexpr int verticesPerCell = 4;
+
+        indices.push_back((indexCount * verticesPerCell) + 0);
+        indices.push_back((indexCount * verticesPerCell) + 1);
+        indices.push_back((indexCount * verticesPerCell) + 2);
+        indices.push_back((indexCount * verticesPerCell) + 0);
+        indices.push_back((indexCount * verticesPerCell) + 2);
+        indices.push_back((indexCount * verticesPerCell) + 3);
 
         ++indexCount;
     }
@@ -177,8 +180,10 @@ int main()
     }
 
     // Test for GetCellState
-    auto state_1 = GetCellState(vertices, { 0, 0 });
+    auto state_1 = GetCellState(vertices, { 10, 10 });
     std::cout << "Cell state 1 = " << (static_cast<bool>(state_1) ? "ALIVE" : "DEAD") << std::endl;
+
+    SetCellState(vertices, { { 10, 10 }, State::DEAD });
 
     while (!glfwWindowShouldClose(window)) {
         // Set dynamic buffer
@@ -522,22 +527,35 @@ std::vector<Vertex> CreateCell(Cell cell)
 
 State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position)
 {
-
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
 
     State state = State::DEAD;
 
     constexpr int verticesPerCell = 4;
     // Convert 2D position to 1D array
-    uint32_t index = position.x * (verticesPerCell - 1) + position.y;
+    const uint32_t index = position.x * (verticesPerCell - 1) + position.y;
 
-    if (buffer.at(index).colour == colourWhite) {
-        state = State::ALIVE;
+    if (index < buffer.size()) {
+        if (buffer.at(index).colour == colourWhite) {
+            state = State::ALIVE;
+        }
     }
 
     return state;
 }
 
-void SetCellState(const std::vector<Vertex>& buffer, Cell cell)
+void SetCellState(std::vector<Vertex>& buffer, Cell cell)
 {
+    constexpr glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
+    constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
+
+    constexpr int verticesPerCell = 4;
+
+    const uint32_t index = cell.position.x * (verticesPerCell - 1) + cell.position.y;
+
+    if (index < buffer.size()) {
+        for (int x = 0; x < 4; ++x) {
+            buffer.at(index + x).colour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
+        }
+    }
 }
