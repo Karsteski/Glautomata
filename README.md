@@ -15,6 +15,7 @@ Conway's Game of Life rendered using OpenGL
 $ meson setup builddir
 $ cd builddir
 $ meson configure -Dcpp_std=c++17
+$ meson configure -Dbuildtype=release
 $ meson compile
 $ ./glautomata
 

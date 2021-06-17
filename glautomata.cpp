@@ -3,7 +3,7 @@
 // clang-format off
 #include <GL/glew.h>
 #include <GL/gl.h>
-#include <stdexcept>
+
 
 // Disables inclusion of the dev-environ header.
 // Allows GLFW + extension loader headers to be included in any order.
@@ -20,33 +20,19 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
-constexpr int windowWidth = 1280;
-constexpr int windowHeight = 720;
+constexpr int windowWidth = 1000;
+constexpr int windowHeight = 1000;
 const std::string shaderPath = "../shader.glsl";
-constexpr int gridSize = 10;
-
-// ------------------
-// Program Management
-// ------------------
-
-void Initialize(GLFWwindow*& window);
-void Run();
-int Exit(GLFWwindow* window);
-
-void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adjust size of viewport
-
-// ---------------------
-// OpenGL Error Handling
-// ---------------------
-
-void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
+constexpr int gridSize = 250;
 
 // ----------------------
 // Helper structs & enums
@@ -78,6 +64,22 @@ struct Cell {
         , state(state_) {};
 };
 
+// ------------------
+// Program Management
+// ------------------
+
+void Initialize(GLFWwindow*& window);
+void Run();
+int Exit(GLFWwindow* window);
+void ProcessKeyboardInput(GLFWwindow*& window, std::vector<Vertex>& buffer);
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adjust size of viewport
+
+// ---------------------
+// OpenGL Error Handling
+// ---------------------
+
+void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
+
 // ----------------
 // Shader Functions
 // ----------------
@@ -87,12 +89,15 @@ uint32_t compileShader(uint32_t shaderType, std::string& shaderSource);
 uint32_t createShader(ShaderProgramSource& shaderSource);
 
 // ------------------
-// Automata Functions
+// Game of Life Functions
 // ------------------
 
 std::vector<Vertex> CreateCell(Cell cell);
 State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position);
 void SetCellState(std::vector<Vertex>& buffer, Cell cell);
+void GenerateRandomCells(std::vector<Vertex>& buffer);
+void GameOfLife(std::vector<Vertex>& buffer);
+void RestartGame(std::vector<Vertex>& buffer);
 
 int main()
 {
@@ -115,16 +120,9 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, nVertexBytes, nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
 
-    // Index Buffer data
-    // std::vector<uint32_t> indices = {
-    //     0, 1, 2, 0, 2, 3,
-    //     4, 5, 6, 4, 6, 7,
-    //     8, 9, 10, 8, 10, 11
-    // };
-
     int indexCount = 0;
     std::vector<uint32_t> indices;
-    while (indexCount < 10) {
+    while (indexCount < std::pow(gridSize, 2)) {
         constexpr int verticesPerCell = 4;
 
         indices.push_back((indexCount * verticesPerCell) + 0);
@@ -164,28 +162,13 @@ int main()
     uint32_t shader = createShader(shaderSource);
     glUseProgram(shader);
 
-    auto c0 = CreateCell({ { 0, 0 }, State::DEAD });
-    auto c1 = CreateCell({ { 1, 1 }, State::ALIVE });
-
     std::vector<Vertex> vertices;
     vertices.reserve(nVertices);
-    //vertices.insert(vertices.end(), c0.begin(), c0.end());
-    //vertices.insert(vertices.end(), c1.begin(), c1.end());
 
-    int count = 0;
-    while (count < 10) {
-        auto cell = CreateCell({ { count, count }, count % 2 ? State::ALIVE : State::DEAD });
-        vertices.insert(vertices.end(), cell.begin(), cell.end());
-        ++count;
-    }
-
-    // Test for GetCellState
-    auto state_1 = GetCellState(vertices, { 10, 10 });
-    std::cout << "Cell state 1 = " << (static_cast<bool>(state_1) ? "ALIVE" : "DEAD") << std::endl;
-
-    SetCellState(vertices, { { 10, 10 }, State::DEAD });
+    GenerateRandomCells(vertices);
 
     while (!glfwWindowShouldClose(window)) {
+
         // Set dynamic buffer
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(Vertex), vertices.data());
@@ -210,6 +193,12 @@ int main()
         // Update screen
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // Game of Life
+        GameOfLife(vertices);
+
+        // Restart game if space key is pressed
+        ProcessKeyboardInput(window, vertices);
     }
 
     glDeleteProgram(shader);
@@ -239,6 +228,9 @@ void Initialize(GLFWwindow*& window)
 
     // For OpenGL Debugging
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+
+    // GLFW Options
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create window
     window = glfwCreateWindow(windowWidth, windowHeight, "Glautomata - John Conway's Game of Life", NULL, NULL);
@@ -284,6 +276,13 @@ int Exit(GLFWwindow* window)
     glfwTerminate();
 
     std::exit(EXIT_SUCCESS);
+}
+
+void ProcessKeyboardInput(GLFWwindow*& window, std::vector<Vertex>& buffer)
+{
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        RestartGame(buffer);
+    }
 }
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
@@ -497,12 +496,12 @@ uint32_t createShader(ShaderProgramSource& source)
 }
 
 // ------------------
-// Automata Functions
+// Game of Life Functions
 // ------------------
 
 std::vector<Vertex> CreateCell(Cell cell)
 {
-    constexpr float size = 100.0f;
+    constexpr float size = 4.0f;
     constexpr glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
 
@@ -528,19 +527,20 @@ std::vector<Vertex> CreateCell(Cell cell)
 State GetCellState(const std::vector<Vertex>& buffer, glm::vec2 position)
 {
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
+    constexpr int nVertices = 4;
 
     State state = State::DEAD;
 
-    constexpr int verticesPerCell = 4;
-    // Convert 2D position to 1D array
-    const uint32_t index = position.x * (verticesPerCell - 1) + position.y;
+    if (position.x >= 0 && position.y >= 0) {
+        // Convert 2D position to 1D array
+        const uint32_t index = ((position.x * gridSize) + position.y) * nVertices;
 
-    if (index < buffer.size()) {
-        if (buffer.at(index).colour == colourWhite) {
-            state = State::ALIVE;
+        if (index < buffer.size()) {
+            if (buffer.at(index).colour == colourWhite) {
+                state = State::ALIVE;
+            }
         }
     }
-
     return state;
 }
 
@@ -548,14 +548,89 @@ void SetCellState(std::vector<Vertex>& buffer, Cell cell)
 {
     constexpr glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
+    constexpr int nVertices = 4;
 
-    constexpr int verticesPerCell = 4;
-
-    const uint32_t index = cell.position.x * (verticesPerCell - 1) + cell.position.y;
+    const uint32_t index = ((cell.position.x * gridSize) + cell.position.y) * nVertices;
 
     if (index < buffer.size()) {
         for (int x = 0; x < 4; ++x) {
             buffer.at(index + x).colour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
         }
     }
+}
+
+void GenerateRandomCells(std::vector<Vertex>& buffer)
+{
+    // Seed srand() with the current time.
+    std::srand(std::time(nullptr));
+
+    for (int x = 0; x < gridSize; ++x) {
+        for (int y = 0; y < gridSize; ++y) {
+            auto cell = CreateCell({ { x, y }, rand() % 2 ? State::ALIVE : State::DEAD });
+            buffer.insert(buffer.end(), cell.begin(), cell.end());
+        }
+    }
+}
+
+void GameOfLife(std::vector<Vertex>& buffer)
+{
+    // Write to tempBuffer while reading "cells" in buffer
+    std::vector<Vertex> tempBuffer;
+    tempBuffer.reserve(std::pow(gridSize, 2) * 4);
+
+    // Iterate over grid of cells.
+    for (int cellPosX = 0; cellPosX < gridSize; ++cellPosX) {
+        for (int cellPosY = 0; cellPosY < gridSize; ++cellPosY) {
+
+            int nAliveNeighbours = 0;
+            for (int neighbourIndex_X = -1; neighbourIndex_X <= 1; ++neighbourIndex_X) {
+                for (int neighbourIndex_Y = -1; neighbourIndex_Y <= 1; ++neighbourIndex_Y) {
+
+                    // Don't check {0, 0} as that's the current cell.
+                    if (neighbourIndex_X != 0 || neighbourIndex_Y != 0) {
+
+                        const int neighbourPox_X = cellPosX + neighbourIndex_X;
+                        const int neighbourPos_Y = cellPosY + neighbourIndex_Y;
+
+                        State neighbourState = GetCellState(buffer, { neighbourPox_X, neighbourPos_Y });
+
+                        if (neighbourState == State::ALIVE) {
+                            ++nAliveNeighbours;
+                        }
+                    }
+                }
+            }
+
+            const State currentCellState = GetCellState(buffer, { cellPosX, cellPosY });
+            State newCellState = State::DEAD;
+
+            switch (currentCellState) {
+            case (State::ALIVE): {
+                if (nAliveNeighbours < 2 || 3 < nAliveNeighbours) {
+                    newCellState = State::DEAD; // Cell dies via underpopulation or overpopulation.
+                } else if (nAliveNeighbours == 2 || nAliveNeighbours == 3) {
+                    newCellState = State::ALIVE; // Cell is happy and remains alive :)
+                }
+                break;
+            }
+            case (State::DEAD): {
+                if (nAliveNeighbours == 3) {
+                    newCellState = State::ALIVE; // Cells reproduce to create an alive cell.
+                }
+                break;
+            }
+            }
+
+            auto tempCell = CreateCell({ { cellPosX, cellPosY }, newCellState });
+            tempBuffer.insert(tempBuffer.end(), tempCell.begin(), tempCell.end());
+        }
+    }
+
+    buffer = tempBuffer;
+}
+
+void RestartGame(std::vector<Vertex>& buffer)
+{
+    buffer.erase(buffer.begin(), buffer.end());
+    GenerateRandomCells(buffer);
 }
