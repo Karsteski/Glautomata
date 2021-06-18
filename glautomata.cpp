@@ -29,10 +29,14 @@
 #include <string>
 #include <vector>
 
-constexpr int windowWidth = 1000;
-constexpr int windowHeight = 1000;
-const std::string shaderPath = "../shader.glsl";
+// -------
+// Globals
+// -------
+
+constexpr int windowSize = 1000; // window is always square.
 constexpr int gridSize = 250;
+constexpr float cellSize = static_cast<float>(windowSize) / static_cast<float>(gridSize);
+const std::string shaderPath = "../shader.glsl";
 
 // ----------------------
 // Helper structs & enums
@@ -59,9 +63,9 @@ struct Cell {
     State state;
 
     // Allow for initializer list usage
-    Cell(glm::vec2 position_, State state_)
-        : position(position_)
-        , state(state_) {};
+    Cell(glm::vec2 m_position, State m_state)
+        : position(m_position)
+        , state(m_state) {};
 };
 
 // ------------------
@@ -69,23 +73,28 @@ struct Cell {
 // ------------------
 
 void Initialize(GLFWwindow*& window);
-void Run();
 int Exit(GLFWwindow* window);
-void ProcessKeyboardInput(GLFWwindow*& window, std::vector<Vertex>& buffer);
+void ProcessKeyboardInput(GLFWwindow* window, std::vector<Vertex>& buffer);
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adjust size of viewport
 
 // ---------------------
-// OpenGL Error Handling
+// OpenGL Code
 // ---------------------
 
 void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
+uint32_t CreateVAO();
+void CreateVBO();
+std::vector<uint32_t> CreateIBO();
+uint32_t CreateShader(const std::string& shaderPath);
+void SpecifyLayout();
+void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, uint32_t shader);
 
 // ----------------
 // Shader Functions
 // ----------------
 
 ShaderProgramSource parseShader(const std::string& filepath);
-uint32_t compileShader(uint32_t shaderType, std::string& shaderSource);
+uint32_t compileShader(uint32_t shaderType, const std::string& shaderSource);
 uint32_t createShader(ShaderProgramSource& shaderSource);
 
 // ------------------
@@ -104,104 +113,35 @@ int main()
     GLFWwindow* window = nullptr;
     Initialize(window);
 
-    constexpr int nBuffers = 1;
+    constexpr int nVerticesPerCell = 4;
+    constexpr int nVertices = (gridSize * gridSize) * nVerticesPerCell;
 
-    // Create Vertex Array Object
-    uint32_t VAO = 0;
-    glGenVertexArrays(nBuffers, &VAO);
-    glBindVertexArray(VAO);
+    const uint32_t VAO = CreateVAO();
 
-    const int nVertices = std::pow(gridSize, 2) * 4;
-    const int nVertexBytes = nVertices * sizeof(Vertex);
+    CreateVBO();
 
-    // Create Vertex Buffer Object
-    uint32_t VBO = 0;
-    glGenBuffers(nBuffers, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, nVertexBytes, nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
+    std::vector<uint32_t> cellIndices = CreateIBO();
 
-    int indexCount = 0;
-    std::vector<uint32_t> indices;
-    while (indexCount < std::pow(gridSize, 2)) {
-        constexpr int verticesPerCell = 4;
+    SpecifyLayout();
 
-        indices.push_back((indexCount * verticesPerCell) + 0);
-        indices.push_back((indexCount * verticesPerCell) + 1);
-        indices.push_back((indexCount * verticesPerCell) + 2);
-        indices.push_back((indexCount * verticesPerCell) + 0);
-        indices.push_back((indexCount * verticesPerCell) + 2);
-        indices.push_back((indexCount * verticesPerCell) + 3);
+    uint32_t shader = CreateShader(shaderPath);
 
-        ++indexCount;
-    }
+    std::vector<Vertex> cellVertices;
+    cellVertices.reserve(nVertices);
 
-    // Create Index Buffer Object
-    uint32_t IBO = 0;
-    glGenBuffers(nBuffers, &IBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_DYNAMIC_DRAW);
-
-    // Link current VAO with the VBO, and define its layout
-    constexpr int positionAttribute = 0;
-    constexpr int colourAttribute = 1;
-
-    constexpr int nFloatsInAttribute = 3;
-    constexpr int stride = sizeof(Vertex);
-    const void* positionOffset = (void*)offsetof(struct Vertex, position); // (void*) as the OpenGL API requires it.
-    const void* colourOffset = (void*)offsetof(struct Vertex, colour);
-
-    glVertexAttribPointer(positionAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, positionOffset);
-    glEnableVertexAttribArray(positionAttribute);
-
-    glVertexAttribPointer(colourAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, colourOffset);
-    glEnableVertexAttribArray(colourAttribute);
-
-    // Shader creation
-    ShaderProgramSource shaderSource = parseShader(shaderPath);
-
-    uint32_t shader = createShader(shaderSource);
-    glUseProgram(shader);
-
-    std::vector<Vertex> vertices;
-    vertices.reserve(nVertices);
-
-    GenerateRandomCells(vertices);
+    GenerateRandomCells(cellVertices);
 
     while (!glfwWindowShouldClose(window)) {
 
-        // Set dynamic buffer
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(Vertex), vertices.data());
+        Render(window, VAO, cellVertices, cellIndices, shader);
 
-        // Clear screen
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // Set viewport size to window size
-        static int currentWindowWidth = 0;
-        static int currentWindowHeight = 0;
-        glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
-        glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-
-        // Orthographic project matrix.
-        glm::mat4 projection = glm::ortho(0.0f, (float)currentWindowWidth, 0.0f, (float)currentWindowHeight, 0.0f, 100.0f);
-        constexpr int nElements = 1;
-        glUniformMatrix4fv(glGetUniformLocation(shader, "u_MVP"), nElements, GL_FALSE, &projection[0][0]);
-
-        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, nullptr);
-
-        // Update screen
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-
-        // Game of Life
-        GameOfLife(vertices);
+        // Update Game of Life every frame.
+        GameOfLife(cellVertices);
 
         // Restart game if space key is pressed
-        ProcessKeyboardInput(window, vertices);
+        ProcessKeyboardInput(window, cellVertices);
     }
 
-    glDeleteProgram(shader);
     Exit(window);
 }
 
@@ -233,7 +173,7 @@ void Initialize(GLFWwindow*& window)
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create window
-    window = glfwCreateWindow(windowWidth, windowHeight, "Glautomata - John Conway's Game of Life", NULL, NULL);
+    window = glfwCreateWindow(windowSize, windowSize, "Glautomata - John Conway's Game of Life", NULL, NULL);
 
     if (window == NULL) {
         std::cout << "GLFW window creation failed\n"
@@ -266,10 +206,6 @@ void Initialize(GLFWwindow*& window)
     }
 }
 
-void Run()
-{
-}
-
 int Exit(GLFWwindow* window)
 {
     glfwDestroyWindow(window);
@@ -278,7 +214,7 @@ int Exit(GLFWwindow* window)
     std::exit(EXIT_SUCCESS);
 }
 
-void ProcessKeyboardInput(GLFWwindow*& window, std::vector<Vertex>& buffer)
+void ProcessKeyboardInput(GLFWwindow* window, std::vector<Vertex>& buffer)
 {
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         RestartGame(buffer);
@@ -292,7 +228,7 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
 }
 
 // ---------------------
-// OpenGL Error Handling
+// OpenGL Code
 // ---------------------
 
 // Callback function for printing OpenGL debug statements.
@@ -405,6 +341,113 @@ void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, G
               << sourceMessage << ": " << message << std::endl;
 }
 
+uint32_t CreateVAO()
+{
+    constexpr int nBuffers = 1;
+
+    // Create Vertex Array Object
+    uint32_t VAO = 0;
+    glGenVertexArrays(nBuffers, &VAO);
+    glBindVertexArray(VAO);
+
+    return VAO;
+}
+
+void CreateVBO()
+{
+    constexpr int nVerticesPerCell = 4;
+    constexpr int nVertices = (gridSize * gridSize) * nVerticesPerCell;
+    constexpr int nBuffers = 1;
+    const int nVertexBytes = nVertices * sizeof(Vertex);
+
+    // Create Vertex Buffer Object
+    uint32_t VBO = 0;
+    glGenBuffers(nBuffers, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, nVertexBytes, nullptr, GL_DYNAMIC_DRAW); // passed in nullptr as data will be copied later.
+}
+
+std::vector<uint32_t> CreateIBO()
+{
+    constexpr int nBuffers = 1;
+    constexpr int nVerticesPerCell = 4;
+
+    std::vector<uint32_t> indices;
+    for (int index = 0; index < std::pow(gridSize, 2); ++index) {
+        // The final digit in the expression is the pattern of the indices for each cell
+        indices.push_back((index * nVerticesPerCell) + 0);
+        indices.push_back((index * nVerticesPerCell) + 1);
+        indices.push_back((index * nVerticesPerCell) + 2);
+        indices.push_back((index * nVerticesPerCell) + 0);
+        indices.push_back((index * nVerticesPerCell) + 2);
+        indices.push_back((index * nVerticesPerCell) + 3);
+    }
+
+    // Create Index Buffer Object
+    uint32_t IBO = 0;
+    glGenBuffers(nBuffers, &IBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_DYNAMIC_DRAW);
+
+    return indices;
+}
+
+uint32_t CreateShader(const std::string& shaderPath)
+{
+    ShaderProgramSource shaderSource = parseShader(shaderPath);
+
+    uint32_t shader = createShader(shaderSource);
+    glUseProgram(shader);
+
+    return shader;
+}
+
+void SpecifyLayout()
+{
+    // Link currently bound VAO with the currently bound VBO, and define its layout.
+    constexpr int positionAttribute = 0;
+    constexpr int colourAttribute = 1;
+
+    constexpr int nFloatsInAttribute = 3;
+    constexpr int stride = sizeof(Vertex);
+    const void* positionOffset = (void*)offsetof(struct Vertex, position); // (void*) as the OpenGL API requires it.
+    const void* colourOffset = (void*)offsetof(struct Vertex, colour);
+
+    glVertexAttribPointer(positionAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, positionOffset);
+    glEnableVertexAttribArray(positionAttribute);
+
+    glVertexAttribPointer(colourAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, colourOffset);
+    glEnableVertexAttribArray(colourAttribute);
+}
+
+void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, uint32_t shader)
+{
+    // Set dynamic buffer
+    glBindBuffer(GL_ARRAY_BUFFER, VAO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(Vertex), vertices.data());
+
+    // Clear screen
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // Set viewport size to window size
+    static int currentWindowWidth = 0;
+    static int currentWindowHeight = 0;
+    glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
+    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+
+    // Orthographic project matrix.
+    glm::mat4 projection = glm::ortho(0.0f, (float)currentWindowWidth, 0.0f, (float)currentWindowHeight, 0.0f, 100.0f);
+    constexpr int nElements = 1;
+    glUniformMatrix4fv(glGetUniformLocation(shader, "u_MVP"), nElements, GL_FALSE, &projection[0][0]);
+
+    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, nullptr);
+
+    // Update screen
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+}
+
 // ----------------
 // Shader Functions
 // ----------------
@@ -444,7 +487,7 @@ ShaderProgramSource parseShader(const std::string& filepath)
     return shaders;
 }
 
-uint32_t compileShader(uint32_t shaderType, std::string& shaderSource)
+uint32_t compileShader(uint32_t shaderType, const std::string& shaderSource)
 {
     uint32_t id = glCreateShader(shaderType);
 
@@ -501,7 +544,6 @@ uint32_t createShader(ShaderProgramSource& source)
 
 std::vector<Vertex> CreateCell(Cell cell)
 {
-    constexpr float size = 4.0f;
     constexpr glm::vec3 colourBlack = { 0.0f, 0.0f, 0.0f };
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
 
@@ -509,16 +551,16 @@ std::vector<Vertex> CreateCell(Cell cell)
     glm::vec3 cellColour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
 
     // Adjust each position for the size of a cell
-    cell.position *= size;
+    cell.position *= cellSize;
 
     // Vertex Buffer data
     cellVertices[0].position = { cell.position.x, cell.position.y };
     cellVertices[0].colour = cellColour;
-    cellVertices[1].position = { cell.position.x + size, cell.position.y };
+    cellVertices[1].position = { cell.position.x + cellSize, cell.position.y };
     cellVertices[1].colour = cellColour;
-    cellVertices[2].position = { cell.position.x + size, cell.position.y + size };
+    cellVertices[2].position = { cell.position.x + cellSize, cell.position.y + cellSize };
     cellVertices[2].colour = cellColour;
-    cellVertices[3].position = { cell.position.x, cell.position.y + size };
+    cellVertices[3].position = { cell.position.x, cell.position.y + cellSize };
     cellVertices[3].colour = cellColour;
 
     return cellVertices;
@@ -621,7 +663,7 @@ void GameOfLife(std::vector<Vertex>& buffer)
             }
             }
 
-            auto tempCell = CreateCell({ { cellPosX, cellPosY }, newCellState });
+            const auto tempCell = CreateCell({ { cellPosX, cellPosY }, newCellState });
             tempBuffer.insert(tempBuffer.end(), tempCell.begin(), tempCell.end());
         }
     }
