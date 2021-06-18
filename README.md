@@ -4,13 +4,21 @@ John Conway's Game of Life displayed using batch rendering in OpenGL
 
 <img src="resources/glautomata-video.gif" alt="Glautomata-GIF" height="500">
 
-## Building Project
+## Get Project
 
 ```bash
+git clone --recursive https://github.com/Karsteski/Glautomata.git
+```
 
+## Building Project
+
+Project is self-contained and has been built on Linux.
+It doesn't currently build as a self-contained project on Windows because of an [issue with how Meson invokes the Microsoft Resource Compiler](https://github.com/mesonbuild/meson/issues/4105) for the GLEW library.
+GLEW can be in installed and linked separately into the project for Windows, using [vcpkg](https://vcpkg.io/en/index.html) or your package manager of choice.
+
+```bash
 # User must have the Meson build system installed.
 # Project must be built with C++17 or later.
-# Project is self-contained and has been built on Linux + Windows
 
 ## Linux instructions
 
@@ -20,7 +28,6 @@ $ meson configure -Dcpp_std=c++17
 $ meson configure -Dbuildtype=release
 $ meson compile
 $ ./glautomata
-
 ```
 
 ## Usage
