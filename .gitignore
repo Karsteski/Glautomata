@@ -9,4 +9,4 @@
 !/subprojects/glm.wrap
 
 # Keep the GLFW source directory.
-!/subprojects/glfw-3.3.4
+!/subprojects/glfw

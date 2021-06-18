@@ -15,7 +15,7 @@ glfw_opt_var.add_cmake_defines({'GLFW_BUILD_EXAMPLES': false})
 glfw_opt_var.add_cmake_defines({'GLFW_BUILD_TESTS': false})
 glfw_opt_var.add_cmake_defines({'GLFW_BUILD_DOCS': false})
 # Configure the CMake project
-glfw_sub_proj = cmake.subproject('glfw-3.3.4', options: glfw_opt_var)
+glfw_sub_proj = cmake.subproject('glfw', options: glfw_opt_var)
 # Fetch dependency object
 glfw_dep = glfw_sub_proj.dependency('glfw')
 
