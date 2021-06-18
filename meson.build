@@ -13,7 +13,7 @@ glm_dep = dependency('glm', fallback : ['glm', 'glm_dep'])
 
 deps = [glfw_dep, glew_dep, opengl_dep, glm_dep]
 
-src_file = 'glautomata.cpp'
+src_file = 'src/glautomata.cpp'
 
 executable(
     'glautomata',

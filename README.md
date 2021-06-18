@@ -1,10 +1,12 @@
-# Oglre
+# Glautomata - Conway's Game of Life
 
-Conway's Game of Life rendered using OpenGL
+John Conway's Game of Life displayed using batch rendering in OpenGL
+
+<img src="resources/glautomata-video.gif" alt="Glautomata-GIF" height="500">
 
 ## Building Project
 
-```cpp
+```bash
 
 # User must have the Meson build system installed.
 # Project must be built with C++17 or later.
@@ -20,6 +22,12 @@ $ meson compile
 $ ./glautomata
 
 ```
+
+## Usage
+
+- The Game of Life automatically runs once executable is started.
+- Press *spacebar* to regenerate the game once it's run its course.
+- Enjoy :)
 
 ## License
 
