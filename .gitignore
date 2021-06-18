@@ -5,6 +5,8 @@
 /subprojects/*
 
 # Keep the Wrap DB definitions. 
-!/subprojects/sdl2.wrap
 !/subprojects/glew.wrap
 !/subprojects/glm.wrap
+
+# Keep the GLFW source directory.
+!/subprojects/glfw-3.3.4

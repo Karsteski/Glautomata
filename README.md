@@ -10,7 +10,7 @@ John Conway's Game of Life displayed using batch rendering in OpenGL
 
 # User must have the Meson build system installed.
 # Project must be built with C++17 or later.
-# Project is self-contained and can has been tested to build on Linux + Windows
+# Project is self-contained and has been built on Linux + Windows
 
 ## Linux instructions
 
