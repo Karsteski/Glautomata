@@ -4,7 +4,6 @@
 #include <GL/glew.h>
 #include <GL/gl.h>
 
-
 // Disables inclusion of the dev-environ header.
 // Allows GLFW + extension loader headers to be included in any order.
 // GLFW including OpenGL headers causes function definition ambiguity.
@@ -117,13 +116,9 @@ int main()
     constexpr int nVertices = (gridSize * gridSize) * nVerticesPerCell;
 
     const uint32_t VAO = CreateVAO();
-
     CreateVBO();
-
     std::vector<uint32_t> cellIndices = CreateIBO();
-
     SpecifyLayout();
-
     uint32_t shader = CreateShader(shaderPath);
 
     std::vector<Vertex> cellVertices;
@@ -132,7 +127,6 @@ int main()
     GenerateRandomCells(cellVertices);
 
     while (!glfwWindowShouldClose(window)) {
-
         Render(window, VAO, cellVertices, cellIndices, shader);
 
         // Update Game of Life every frame.
@@ -151,7 +145,6 @@ int main()
 
 void Initialize(GLFWwindow*& window)
 {
-
     // GLFW Setup
     if (!glfwInit()) {
         std::cout << "GLFW Initialization failed!\n"
@@ -173,9 +166,9 @@ void Initialize(GLFWwindow*& window)
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create window
-    window = glfwCreateWindow(windowSize, windowSize, "Glautomata - John Conway's Game of Life", NULL, NULL);
+    window = glfwCreateWindow(windowSize, windowSize, "Glautomata - John Conway's Game of Life", nullptr, nullptr);
 
-    if (window == NULL) {
+    if (window == nullptr) {
         std::cout << "GLFW window creation failed\n"
                   << "Exiting...\n ";
         exit(EXIT_FAILURE);
@@ -235,7 +228,6 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
 // Note that OpenGL Debug Output must be enabled to utilize glDebugMessageCallback() and consequently this function.
 void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data)
 {
-
     // To enable the debugging layer of OpenGL:
 
     // glEnable(GL_DEBUG_OUTPUT); - This is a faster version but there are no debugger breakpoints.
@@ -668,6 +660,7 @@ void GameOfLife(std::vector<Vertex>& buffer)
         }
     }
 
+    // Update buffer with the updated cell states.
     buffer = tempBuffer;
 }
 
