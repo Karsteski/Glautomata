@@ -26,6 +26,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // -------
@@ -80,11 +81,11 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height); // Adju
 // OpenGL Code
 // ---------------------
 
-void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
+void APIENTRY GLDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data);
 uint32_t CreateVAO();
 void CreateVBO();
 std::vector<uint32_t> CreateIBO();
-uint32_t CreateShader(const std::string& shaderPath);
+uint32_t CreateShader(const std::string_view shaderPath);
 void SpecifyLayout();
 void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, uint32_t shader);
 
@@ -92,9 +93,9 @@ void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>&
 // Shader Functions
 // ----------------
 
-ShaderProgramSource parseShader(const std::string& filepath);
-uint32_t compileShader(uint32_t shaderType, const std::string& shaderSource);
-uint32_t createShader(ShaderProgramSource& shaderSource);
+ShaderProgramSource ParseShader(const std::string_view filepath);
+uint32_t CompileShader(uint32_t shaderType, const std::string_view shaderSource);
+uint32_t CreateShader(ShaderProgramSource& shaderSource);
 
 // ------------------
 // Game of Life Functions
@@ -117,9 +118,9 @@ int main()
 
     const uint32_t VAO = CreateVAO();
     CreateVBO();
-    std::vector<uint32_t> cellIndices = CreateIBO();
+    const std::vector<uint32_t> cellIndices = CreateIBO();
     SpecifyLayout();
-    uint32_t shader = CreateShader(shaderPath);
+    const uint32_t shader = CreateShader(shaderPath);
 
     std::vector<Vertex> cellVertices;
     cellVertices.reserve(nVertices);
@@ -191,7 +192,7 @@ void Initialize(GLFWwindow*& window)
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
-        glDebugMessageCallback(glDebugPrintMessage, nullptr);
+        glDebugMessageCallback(GLDebugPrintMessage, nullptr);
 
         std::cout << ("OpenGL Debug Mode\n");
     } else {
@@ -226,7 +227,7 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
 
 // Callback function for printing OpenGL debug statements.
 // Note that OpenGL Debug Output must be enabled to utilize glDebugMessageCallback() and consequently this function.
-void APIENTRY glDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data)
+void APIENTRY GLDebugPrintMessage(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char* message, const void* data)
 {
     // To enable the debugging layer of OpenGL:
 
@@ -384,11 +385,11 @@ std::vector<uint32_t> CreateIBO()
     return indices;
 }
 
-uint32_t CreateShader(const std::string& shaderPath)
+uint32_t CreateShader(const std::string_view shaderPath)
 {
-    ShaderProgramSource shaderSource = parseShader(shaderPath);
+    ShaderProgramSource shaderSource = ParseShader(shaderPath);
 
-    uint32_t shader = createShader(shaderSource);
+    const uint32_t shader = CreateShader(shaderSource);
     glUseProgram(shader);
 
     return shader;
@@ -402,8 +403,8 @@ void SpecifyLayout()
 
     constexpr int nFloatsInAttribute = 3;
     constexpr int stride = sizeof(Vertex);
-    const void* positionOffset = (void*)offsetof(struct Vertex, position); // (void*) as the OpenGL API requires it.
-    const void* colourOffset = (void*)offsetof(struct Vertex, colour);
+    const void* const positionOffset = (void*)offsetof(struct Vertex, position); // (void*) as the OpenGL API requires it.
+    const void* const colourOffset = (void*)offsetof(struct Vertex, colour);
 
     glVertexAttribPointer(positionAttribute, nFloatsInAttribute, GL_FLOAT, GL_FALSE, stride, positionOffset);
     glEnableVertexAttribArray(positionAttribute);
@@ -429,7 +430,7 @@ void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>&
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
     // Orthographic project matrix.
-    glm::mat4 projection = glm::ortho(0.0f, (float)currentWindowWidth, 0.0f, (float)currentWindowHeight, 0.0f, 100.0f);
+    const glm::mat4 projection = glm::ortho(0.0f, (float)currentWindowWidth, 0.0f, (float)currentWindowHeight, 0.0f, 100.0f);
     constexpr int nElements = 1;
     glUniformMatrix4fv(glGetUniformLocation(shader, "u_MVP"), nElements, GL_FALSE, &projection[0][0]);
 
@@ -444,7 +445,7 @@ void Render(GLFWwindow*& window, const uint32_t& VAO, const std::vector<Vertex>&
 // Shader Functions
 // ----------------
 
-ShaderProgramSource parseShader(const std::string& filepath)
+ShaderProgramSource ParseShader(const std::string_view filepath)
 {
     // For separating the two stringstreams.
     enum class ShaderType {
@@ -453,7 +454,7 @@ ShaderProgramSource parseShader(const std::string& filepath)
         FRAGMENT = 1
     };
 
-    std::ifstream stream(filepath);
+    std::ifstream stream(filepath.data());
     std::array<std::stringstream, 2> ss;
 
     std::string line = "";
@@ -479,11 +480,11 @@ ShaderProgramSource parseShader(const std::string& filepath)
     return shaders;
 }
 
-uint32_t compileShader(uint32_t shaderType, const std::string& shaderSource)
+uint32_t CompileShader(uint32_t shaderType, const std::string_view shaderSource)
 {
     uint32_t id = glCreateShader(shaderType);
 
-    const char* src = shaderSource.c_str();
+    const char* src = shaderSource.data();
 
     constexpr int nShaderSources = 1;
     glShaderSource(id, nShaderSources, &src, nullptr);
@@ -511,11 +512,11 @@ uint32_t compileShader(uint32_t shaderType, const std::string& shaderSource)
     return id;
 }
 
-uint32_t createShader(ShaderProgramSource& source)
+uint32_t CreateShader(ShaderProgramSource& source)
 {
-    uint32_t program = glCreateProgram();
-    uint32_t vs = compileShader(GL_VERTEX_SHADER, source.vertexSource);
-    uint32_t fs = compileShader(GL_FRAGMENT_SHADER, source.fragmentSource);
+    const uint32_t program = glCreateProgram();
+    const uint32_t vs = CompileShader(GL_VERTEX_SHADER, source.vertexSource);
+    const uint32_t fs = CompileShader(GL_FRAGMENT_SHADER, source.fragmentSource);
 
     // These steps create an executable that is run on the programmable vertex/fragment shader processer on the GPU.
     glAttachShader(program, vs);
@@ -540,7 +541,7 @@ std::vector<Vertex> CreateCell(Cell cell)
     constexpr glm::vec3 colourWhite = { 1.0f, 1.0f, 1.0f };
 
     std::vector<Vertex> cellVertices(4);
-    glm::vec3 cellColour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
+    const glm::vec3 cellColour = static_cast<bool>(cell.state) ? colourWhite : colourBlack;
 
     // Adjust each position for the size of a cell
     cell.position *= cellSize;
@@ -626,7 +627,7 @@ void GameOfLife(std::vector<Vertex>& buffer)
                         const int neighbourPox_X = cellPosX + neighbourIndex_X;
                         const int neighbourPos_Y = cellPosY + neighbourIndex_Y;
 
-                        State neighbourState = GetCellState(buffer, { neighbourPox_X, neighbourPos_Y });
+                        const State neighbourState = GetCellState(buffer, { neighbourPox_X, neighbourPos_Y });
 
                         if (neighbourState == State::ALIVE) {
                             ++nAliveNeighbours;
@@ -636,7 +637,7 @@ void GameOfLife(std::vector<Vertex>& buffer)
             }
 
             const State currentCellState = GetCellState(buffer, { cellPosX, cellPosY });
-            State newCellState = State::DEAD;
+            State newCellState = currentCellState;
 
             switch (currentCellState) {
             case (State::ALIVE): {
