@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -662,7 +663,7 @@ void GameOfLife(std::vector<Vertex>& buffer)
     }
 
     // Update buffer with the updated cell states.
-    buffer = tempBuffer;
+    std::move(tempBuffer.begin(), tempBuffer.end(), buffer.begin());
 }
 
 void RestartGame(std::vector<Vertex>& buffer)
